@@ -215,8 +215,15 @@ function tryAddCheckboxDecorations(
     });
   }
 
+  if (!isOrderedList) {
+    // Collapse the list marker: the rendered checkbox replaces the bullet.
+    // Ordered markers keep their number (handled above), so only unordered
+    // markers are hidden here.
+    decorations.push({ startPos: markerStart, endPos: markerEnd, type: 'hide' });
+  }
+
   decorations.push({
-    startPos: isOrderedList ? checkboxStart : markerStart,
+    startPos: checkboxStart,
     endPos: checkboxEnd,
     type: isChecked ? 'checkboxChecked' : 'checkboxUnchecked',
   });
