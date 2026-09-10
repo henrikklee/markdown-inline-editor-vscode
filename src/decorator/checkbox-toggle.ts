@@ -1,8 +1,12 @@
-import { Position, Range, Selection, WorkspaceEdit, type TextEditor, workspace } from 'vscode';
+import { Position, Range, WorkspaceEdit, type TextEditor, workspace } from 'vscode';
 
 /**
- * Handles checkbox toggle when user clicks inside [ ] or [x].
- * Detects if cursor is positioned inside a checkbox and toggles it.
+ * Handles a checkbox toggle when the user clicks a rendered task-list checkbox.
+ * Detects whether the click is on a real checkbox and toggles it.
+ *
+ * The caret is deliberately not moved here: VS Code has already moved it as
+ * part of the click, and the decorator restores the previous selection after a
+ * successful toggle so clicking a checkbox does not move the cursor.
  *
  * @returns true if a checkbox was toggled, false otherwise
  */
@@ -24,13 +28,21 @@ export function handleCheckboxClick(editor: TextEditor): boolean {
     const bracketStart = match.index;
     const bracketEnd = match.index + 3; // [ ] is 3 chars
 
-    // Check if cursor is on or inside the checkbox [ ] range
-    // Include bracketStart because clicking the ☐ decoration lands cursor there
-    if (cursorChar >= bracketStart && cursorChar <= bracketEnd) {
-      const currentState = match[1];
-      const newState = currentState === ' ' ? 'x' : ' ';
+    // Only real task-list checkboxes: the brackets must be preceded by a list
+    // marker (optionally indented). This stops arbitrary `[ ]` in prose, e.g.
+    // the trailing one in "- [ ] some item [ ]", from being toggled.
+    const textBefore = line.text.substring(0, bracketStart);
+    const listMarkerMatch = textBefore.match(/^(\s*([-*+]|\d+[.)])\s+)$/);
+    if (!listMarkerMatch) {
+      continue;
+    }
 
-      // Toggle the checkbox
+    // The list marker is collapsed by the parser, so a click on the rendered
+    // box can land anywhere from the indent to the closing bracket.
+    const clickStart = textBefore.search(/\S/);
+    if (cursorChar >= clickStart && cursorChar <= bracketEnd) {
+      const newState = match[1] === ' ' ? 'x' : ' ';
+
       const edit = new WorkspaceEdit();
       const charPosition = new Position(selection.active.line, bracketStart + 1);
       edit.replace(
@@ -40,11 +52,6 @@ export function handleCheckboxClick(editor: TextEditor): boolean {
       );
 
       workspace.applyEdit(edit);
-
-      // Move cursor after the checkbox to avoid re-triggering
-      const newCursorPos = new Position(selection.active.line, bracketEnd + 1);
-      editor.selection = new Selection(newCursorPos, newCursorPos);
-
       return true;
     }
   }

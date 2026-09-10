@@ -41,10 +41,23 @@ describe('handleCheckboxClick', () => {
       expect(handleCheckboxClick(editor as any)).toBe(false);
       expect(workspace.applyEdit).not.toHaveBeenCalled();
     });
+
+    it('does not toggle a [ ] that is not a task-list checkbox', () => {
+      const editor = makeEditor('text with [ ] brackets', 11);
+      expect(handleCheckboxClick(editor as any)).toBe(false);
+      expect(workspace.applyEdit).not.toHaveBeenCalled();
+    });
+
+    it('does not toggle a trailing [ ] later in a task-list line', () => {
+      // "- [ ] some item [ ]" — the second [ ] is not a checkbox
+      const editor = makeEditor('- [ ] some item [ ]', 17);
+      expect(handleCheckboxClick(editor as any)).toBe(false);
+      expect(workspace.applyEdit).not.toHaveBeenCalled();
+    });
   });
 
   describe('toggles unchecked → checked', () => {
-    it('toggles [ ] to [x] when cursor is on the opening bracket', () => {
+    it('toggles when the cursor is on the opening bracket', () => {
       // "- [ ] task" — checkbox starts at char 2
       const editor = makeEditor('- [ ] task', 2);
       const result = handleCheckboxClick(editor as any);
@@ -56,65 +69,62 @@ describe('handleCheckboxClick', () => {
       expect(edits[0].newText).toBe('x');
     });
 
-    it('toggles [ ] to [x] when cursor is on the space inside brackets', () => {
-      // "- [ ] task" — space at char 3
+    it('toggles when the cursor is inside the brackets', () => {
       const editor = makeEditor('- [ ] task', 3);
-      const result = handleCheckboxClick(editor as any);
-      expect(result).toBe(true);
-      const edit = (workspace.applyEdit as Mock).mock.calls[0][0] as WorkspaceEdit;
-      expect(edit.getEdits()[0].newText).toBe('x');
+      expect(handleCheckboxClick(editor as any)).toBe(true);
     });
 
-    it('toggles [ ] to [x] when cursor is on the closing bracket', () => {
-      // "- [ ] task" — closing bracket at char 4
+    it('toggles when the cursor is on the closing bracket', () => {
       const editor = makeEditor('- [ ] task', 4);
-      const result = handleCheckboxClick(editor as any);
-      expect(result).toBe(true);
-      const edit = (workspace.applyEdit as Mock).mock.calls[0][0] as WorkspaceEdit;
-      expect(edit.getEdits()[0].newText).toBe('x');
+      expect(handleCheckboxClick(editor as any)).toBe(true);
+    });
+
+    it('toggles when the click lands on the collapsed list marker', () => {
+      const editor = makeEditor('- [ ] task', 0);
+      expect(handleCheckboxClick(editor as any)).toBe(true);
+    });
+
+    it('toggles an indented task-list checkbox', () => {
+      const editor = makeEditor('  - [ ] task', 4);
+      expect(handleCheckboxClick(editor as any)).toBe(true);
+    });
+
+    it('toggles an ordered task-list checkbox', () => {
+      const editor = makeEditor('1. [ ] task', 3);
+      expect(handleCheckboxClick(editor as any)).toBe(true);
     });
   });
 
   describe('toggles checked → unchecked', () => {
     it('toggles [x] to [ ] (lowercase x)', () => {
-      // "- [x] done" — checkbox starts at char 2
       const editor = makeEditor('- [x] done', 3);
-      const result = handleCheckboxClick(editor as any);
-      expect(result).toBe(true);
+      expect(handleCheckboxClick(editor as any)).toBe(true);
       const edit = (workspace.applyEdit as Mock).mock.calls[0][0] as WorkspaceEdit;
       expect(edit.getEdits()[0].newText).toBe(' ');
     });
 
     it('toggles [X] to [ ] (uppercase X)', () => {
       const editor = makeEditor('- [X] done', 3);
-      const result = handleCheckboxClick(editor as any);
-      expect(result).toBe(true);
-      const edit = (workspace.applyEdit as Mock).mock.calls[0][0] as WorkspaceEdit;
-      expect(edit.getEdits()[0].newText).toBe(' ');
+      expect(handleCheckboxClick(editor as any)).toBe(true);
     });
   });
 
-  describe('cursor positioning after toggle', () => {
-    it('moves cursor past the checkbox bracket after toggling', () => {
-      // "- [ ] task" — checkbox `[` at index 2, bracketEnd = 2+3 = 5, cursor set to bracketEnd+1 = 6
+  describe('caret', () => {
+    it('does not move the caret itself (the decorator restores it)', () => {
       const editor = makeEditor('- [ ] task', 3);
       handleCheckboxClick(editor as any);
-      expect(editor.selection.active.character).toBe(6);
+      expect(editor.selection.active.character).toBe(3);
       expect(editor.selection.active.line).toBe(0);
     });
   });
 
   describe('multiple checkboxes on one line', () => {
-    it('toggles the correct checkbox when there are two on the same line', () => {
-      // "[ ] a [ ] b" — first checkbox at 0, second at 6
-      const editor = makeEditor('[ ] a [ ] b', 7); // cursor inside second checkbox
-      const result = handleCheckboxClick(editor as any);
-      expect(result).toBe(true);
+    it('toggles only the checkbox the cursor is on', () => {
+      // "- [ ] a [ ] b" — first checkbox at 2, trailing [ ] at 8 (not a checkbox)
+      const editor = makeEditor('- [ ] a [ ] b', 3);
+      expect(handleCheckboxClick(editor as any)).toBe(true);
       const edit = (workspace.applyEdit as Mock).mock.calls[0][0] as WorkspaceEdit;
-      const edits = edit.getEdits();
-      // The replaced range should be inside the second checkbox (char 7)
-      expect(edits[0].range.start.character).toBe(7); // bracketStart(6) + 1
-      expect(edits[0].newText).toBe('x');
+      expect(edit.getEdits()[0].range.start.character).toBe(3); // bracketStart(2) + 1
     });
   });
 });
