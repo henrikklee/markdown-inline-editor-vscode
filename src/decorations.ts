@@ -36,6 +36,27 @@ export function HideDecorationType() {
 }
 
 /**
+ * Creates a decoration type that collapses the list marker of a rendered
+ * checkbox.
+ *
+ * This must be its own decoration type instance, not a reuse of
+ * {@link HideDecorationType}: decorations are applied with one
+ * `setDecorations` call per parser type, so two parser types sharing an
+ * instance make each call overwrite the other (which made markers flicker
+ * into view).
+ *
+ * @returns {vscode.TextEditorDecorationType} A decoration type that hides a checkbox marker
+ */
+export function CheckboxMarkerDecorationType() {
+  return window.createTextEditorDecorationType({
+    textDecoration: 'none; display: none;',
+    after: {
+      contentText: '',
+    },
+  });
+}
+
+/**
  * Creates a decoration type for making text transparent.
  *
  * Unlike HideDecorationType which uses display: none (removes from layout),

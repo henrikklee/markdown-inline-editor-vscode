@@ -84,7 +84,7 @@ export function processListItem(
     if (markerEnd < end && text[markerEnd] === ' ') {
       markerEnd++;
     }
-    if (tryAddCheckboxDecorations(text, markerStart, markerEnd, end, decorations, false)) {
+    if (tryAddCheckboxDecorations(text, markerStart, markerEnd, end, decorations, scopes, false)) {
       return;
     }
     decorations.push({ startPos: markerStart, endPos: markerEnd, type: 'listItem' });
@@ -118,7 +118,7 @@ export function processListItem(
         writtenNumber !== autoNumber;
 
       if (!autoNumberEnabled) {
-        tryAddCheckboxDecorations(text, markerStart, markerEnd, end, decorations, true);
+        tryAddCheckboxDecorations(text, markerStart, markerEnd, end, decorations, scopes, true);
         return;
       }
 
@@ -129,6 +129,7 @@ export function processListItem(
           markerEnd,
           end,
           decorations,
+          scopes,
           true,
           replacement,
           sourceMismatch,
@@ -181,6 +182,7 @@ function tryAddCheckboxDecorations(
   markerEnd: number,
   end: number,
   decorations: DecorationRange[],
+  scopes: ScopeRange[],
   isOrderedList: boolean,
   orderedReplacement?: string,
   orderedListMarkerMismatch?: boolean,
@@ -219,7 +221,7 @@ function tryAddCheckboxDecorations(
     // Collapse the list marker: the rendered checkbox replaces the bullet.
     // Ordered markers keep their number (handled above), so only unordered
     // markers are hidden here.
-    decorations.push({ startPos: markerStart, endPos: markerEnd, type: 'hide' });
+    decorations.push({ startPos: markerStart, endPos: markerEnd, type: 'checkboxMarker' });
   }
 
   decorations.push({
@@ -227,5 +229,10 @@ function tryAddCheckboxDecorations(
     endPos: checkboxEnd,
     type: isChecked ? 'checkboxChecked' : 'checkboxUnchecked',
   });
+
+  // Reveal the whole checkbox (marker + brackets) as one unit when the cursor or
+  // selection is on it, rather than off the whole `listItem` scope (which spans
+  // the entire line).
+  addScope(scopes, isOrderedList ? checkboxStart : markerStart, checkboxEnd, 'checkbox');
   return true;
 }

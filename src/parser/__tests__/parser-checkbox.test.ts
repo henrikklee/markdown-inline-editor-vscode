@@ -16,7 +16,7 @@ describe('MarkdownParser - Checkbox/Task List', () => {
       // `hide` decoration; the checkbox covers only the `[ ]` syntax so the
       // rendered box can sit on real characters.
       expect(result.filter(d => d.type === 'listItem').length).toBe(0);
-      expect(result).toContainEqual({ startPos: 0, endPos: 2, type: 'hide' });
+      expect(result).toContainEqual({ startPos: 0, endPos: 2, type: 'checkboxMarker' });
       expect(result).toContainEqual({ startPos: 2, endPos: 5, type: 'checkboxUnchecked' });
     });
 
@@ -25,7 +25,7 @@ describe('MarkdownParser - Checkbox/Task List', () => {
       const result = parser.extractDecorations(markdown);
 
       expect(result.filter(d => d.type === 'listItem').length).toBe(0);
-      expect(result).toContainEqual({ startPos: 0, endPos: 2, type: 'hide' });
+      expect(result).toContainEqual({ startPos: 0, endPos: 2, type: 'checkboxMarker' });
       expect(result).toContainEqual({ startPos: 2, endPos: 5, type: 'checkboxUnchecked' });
     });
 
@@ -34,7 +34,7 @@ describe('MarkdownParser - Checkbox/Task List', () => {
       const result = parser.extractDecorations(markdown);
 
       expect(result.filter(d => d.type === 'listItem').length).toBe(0);
-      expect(result).toContainEqual({ startPos: 0, endPos: 2, type: 'hide' });
+      expect(result).toContainEqual({ startPos: 0, endPos: 2, type: 'checkboxMarker' });
       expect(result).toContainEqual({ startPos: 2, endPos: 5, type: 'checkboxUnchecked' });
     });
   });
@@ -45,7 +45,7 @@ describe('MarkdownParser - Checkbox/Task List', () => {
       const result = parser.extractDecorations(markdown);
 
       expect(result.filter(d => d.type === 'listItem').length).toBe(0);
-      expect(result).toContainEqual({ startPos: 0, endPos: 2, type: 'hide' });
+      expect(result).toContainEqual({ startPos: 0, endPos: 2, type: 'checkboxMarker' });
       expect(result).toContainEqual({ startPos: 2, endPos: 5, type: 'checkboxChecked' });
     });
 
@@ -54,7 +54,7 @@ describe('MarkdownParser - Checkbox/Task List', () => {
       const result = parser.extractDecorations(markdown);
 
       expect(result.filter(d => d.type === 'listItem').length).toBe(0);
-      expect(result).toContainEqual({ startPos: 0, endPos: 2, type: 'hide' });
+      expect(result).toContainEqual({ startPos: 0, endPos: 2, type: 'checkboxMarker' });
       expect(result).toContainEqual({ startPos: 2, endPos: 5, type: 'checkboxChecked' });
     });
   });
@@ -78,7 +78,7 @@ describe('MarkdownParser - Checkbox/Task List', () => {
       const result = parser.extractDecorations(markdown);
 
       expect(result.filter(d => d.type === 'listItem').length).toBe(0);
-      expect(result).toContainEqual({ startPos: 2, endPos: 4, type: 'hide' });
+      expect(result).toContainEqual({ startPos: 2, endPos: 4, type: 'checkboxMarker' });
       expect(result).toContainEqual({ startPos: 4, endPos: 7, type: 'checkboxUnchecked' });
     });
   });
