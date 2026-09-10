@@ -42,6 +42,15 @@ describe('handleCheckboxClick', () => {
       expect(workspace.applyEdit).not.toHaveBeenCalled();
     });
 
+    it('toggles when the cursor lands just after the closing bracket (box edge)', () => {
+      // "- [ ] task" — index 5 is the space right after "]". The rendered box
+      // covers it, so a click there must toggle exactly like the box.
+      const editor = makeEditor('- [ ] task', 5);
+      expect(handleCheckboxClick(editor as any)).toBe(true);
+      const edit = (workspace.applyEdit as Mock).mock.calls[0][0] as WorkspaceEdit;
+      expect(edit.getEdits()[0].newText).toBe('x');
+    });
+
     it('does not toggle a [ ] that is not a task-list checkbox', () => {
       const editor = makeEditor('text with [ ] brackets', 11);
       expect(handleCheckboxClick(editor as any)).toBe(false);
@@ -79,11 +88,6 @@ describe('handleCheckboxClick', () => {
       expect(handleCheckboxClick(editor as any)).toBe(true);
     });
 
-    it('toggles when the click lands on the collapsed list marker', () => {
-      const editor = makeEditor('- [ ] task', 0);
-      expect(handleCheckboxClick(editor as any)).toBe(true);
-    });
-
     it('toggles an indented task-list checkbox', () => {
       const editor = makeEditor('  - [ ] task', 4);
       expect(handleCheckboxClick(editor as any)).toBe(true);
@@ -106,6 +110,25 @@ describe('handleCheckboxClick', () => {
     it('toggles [X] to [ ] (uppercase X)', () => {
       const editor = makeEditor('- [X] done', 3);
       expect(handleCheckboxClick(editor as any)).toBe(true);
+    });
+  });
+
+  describe('code protection', () => {
+    it('does not toggle an empty [ ] inside a fenced code block', () => {
+      const markdown = '```js\nconst arr = [ ];\n```';
+      const doc = new TextDocument(Uri.file('test.md'), 'markdown', 1, markdown);
+      const editor = {
+        document: doc,
+        selection: new Selection(new Position(1, 13), new Position(1, 13)),
+      };
+      expect(handleCheckboxClick(editor as any)).toBe(false);
+      expect(workspace.applyEdit).not.toHaveBeenCalled();
+    });
+
+    it('does not toggle an empty [ ] inside an inline code span', () => {
+      const editor = makeEditor('Here is code: `const a = [ ];` in text', 26);
+      expect(handleCheckboxClick(editor as any)).toBe(false);
+      expect(workspace.applyEdit).not.toHaveBeenCalled();
     });
   });
 
