@@ -1,153 +1,81 @@
 import type { Mock } from 'vitest';
-import { handleCheckboxClick } from '../checkbox-toggle';
+import { MarkdownParser } from '../../parser';
+import { buildCheckboxTargets, handleCheckboxClick } from '../checkbox-toggle';
 import { workspace, WorkspaceEdit, Selection, Position, Uri, TextDocument } from '../../test/__mocks__/vscode';
 
-/** Build a minimal TextEditor-shaped object for checkbox-toggle tests. */
-function makeEditor(lineText: string, cursorChar: number) {
-  const doc = new TextDocument(Uri.file('test.md'), 'markdown', 1, lineText);
-  let currentSelection = new Selection(new Position(0, cursorChar), new Position(0, cursorChar));
+let parser: MarkdownParser;
+beforeAll(async () => { parser = await MarkdownParser.create(); });
+beforeEach(() => { (workspace.applyEdit as Mock).mockClear(); });
+
+function makeEditor(text: string, line: number, character: number) {
+  const document = new TextDocument(Uri.file('test.md'), 'markdown', 1, text);
+  let selection = new Selection(new Position(line, character), new Position(line, character));
   return {
-    document: doc,
-    get selection() { return currentSelection; },
-    set selection(s: any) { currentSelection = s; },
+    document,
+    get selection() { return selection; },
+    set selection(value: any) { selection = value; },
   };
 }
 
-describe('handleCheckboxClick', () => {
-  beforeEach(() => {
-    (workspace.applyEdit as Mock).mockClear();
+function toggle(editor: ReturnType<typeof makeEditor>) {
+  const result = parser.extractDecorationsWithScopes(editor.document.getText());
+  const targets = buildCheckboxTargets(editor as any, {
+    version: editor.document.version,
+    text: editor.document.getText(),
+    ...result,
+  });
+  return handleCheckboxClick(editor as any, targets);
+}
+
+function edit(): WorkspaceEdit {
+  return (workspace.applyEdit as Mock).mock.calls[0][0] as WorkspaceEdit;
+}
+
+describe('parser-backed checkbox toggling', () => {
+  it.each([0, 1, 2, 3, 4, 5])('toggles across the rendered target at column %i', (column) => {
+    expect(toggle(makeEditor('- [ ] task', 0, column))).toBe(true);
+    expect(edit().getEdits()[0].newText).toBe('x');
   });
 
-  describe('returns false (no toggle)', () => {
-    it('returns false when there is no checkbox on the line', () => {
-      const editor = makeEditor('just some text', 5);
-      expect(handleCheckboxClick(editor as any)).toBe(false);
-      expect(workspace.applyEdit).not.toHaveBeenCalled();
-    });
-
-    it('returns false when cursor is outside the checkbox range', () => {
-      // "- [ ] task" — checkbox at chars 2-4; cursor at char 8 (inside "task")
-      const editor = makeEditor('- [ ] task', 8);
-      expect(handleCheckboxClick(editor as any)).toBe(false);
-    });
-
-    it('returns false when selection is non-empty (text selected)', () => {
-      const doc = new TextDocument(Uri.file('test.md'), 'markdown', 1, '- [ ] task');
-      // Non-empty selection: anchor ≠ active
-      const editor = {
-        document: doc,
-        selection: new Selection(new Position(0, 2), new Position(0, 5)),
-      };
-      expect(handleCheckboxClick(editor as any)).toBe(false);
-      expect(workspace.applyEdit).not.toHaveBeenCalled();
-    });
-
-    it('toggles when the cursor lands just after the closing bracket (box edge)', () => {
-      // "- [ ] task" — index 5 is the space right after "]". The rendered box
-      // covers it, so a click there must toggle exactly like the box.
-      const editor = makeEditor('- [ ] task', 5);
-      expect(handleCheckboxClick(editor as any)).toBe(true);
-      const edit = (workspace.applyEdit as Mock).mock.calls[0][0] as WorkspaceEdit;
-      expect(edit.getEdits()[0].newText).toBe('x');
-    });
-
-    it('does not toggle a [ ] that is not a task-list checkbox', () => {
-      const editor = makeEditor('text with [ ] brackets', 11);
-      expect(handleCheckboxClick(editor as any)).toBe(false);
-      expect(workspace.applyEdit).not.toHaveBeenCalled();
-    });
-
-    it('does not toggle a trailing [ ] later in a task-list line', () => {
-      // "- [ ] some item [ ]" — the second [ ] is not a checkbox
-      const editor = makeEditor('- [ ] some item [ ]', 17);
-      expect(handleCheckboxClick(editor as any)).toBe(false);
-      expect(workspace.applyEdit).not.toHaveBeenCalled();
+  it('toggles checked state and edits only its source character', () => {
+    expect(toggle(makeEditor('  - [X] done', 0, 5))).toBe(true);
+    expect(edit().getEdits()[0]).toMatchObject({
+      newText: ' ',
+      range: { start: { line: 0, character: 5 } },
     });
   });
 
-  describe('toggles unchecked → checked', () => {
-    it('toggles when the cursor is on the opening bracket', () => {
-      // "- [ ] task" — checkbox starts at char 2
-      const editor = makeEditor('- [ ] task', 2);
-      const result = handleCheckboxClick(editor as any);
-      expect(result).toBe(true);
-      expect(workspace.applyEdit).toHaveBeenCalledTimes(1);
-      const edit = (workspace.applyEdit as Mock).mock.calls[0][0] as WorkspaceEdit;
-      const edits = edit.getEdits();
-      expect(edits).toHaveLength(1);
-      expect(edits[0].newText).toBe('x');
-    });
-
-    it('toggles when the cursor is inside the brackets', () => {
-      const editor = makeEditor('- [ ] task', 3);
-      expect(handleCheckboxClick(editor as any)).toBe(true);
-    });
-
-    it('toggles when the cursor is on the closing bracket', () => {
-      const editor = makeEditor('- [ ] task', 4);
-      expect(handleCheckboxClick(editor as any)).toBe(true);
-    });
-
-    it('toggles an indented task-list checkbox', () => {
-      const editor = makeEditor('  - [ ] task', 4);
-      expect(handleCheckboxClick(editor as any)).toBe(true);
-    });
-
-    it('toggles an ordered task-list checkbox', () => {
-      const editor = makeEditor('1. [ ] task', 3);
-      expect(handleCheckboxClick(editor as any)).toBe(true);
-    });
+  it('supports parser-recognized blockquote and ordered-list targets', () => {
+    expect(toggle(makeEditor('> - [ ] task', 0, 5))).toBe(true);
+    expect(toggle(makeEditor('1. [ ] task', 0, 3))).toBe(true);
+    expect(toggle(makeEditor('1. [ ] task', 0, 0))).toBe(false);
   });
 
-  describe('toggles checked → unchecked', () => {
-    it('toggles [x] to [ ] (lowercase x)', () => {
-      const editor = makeEditor('- [x] done', 3);
-      expect(handleCheckboxClick(editor as any)).toBe(true);
-      const edit = (workspace.applyEdit as Mock).mock.calls[0][0] as WorkspaceEdit;
-      expect(edit.getEdits()[0].newText).toBe(' ');
-    });
-
-    it('toggles [X] to [ ] (uppercase X)', () => {
-      const editor = makeEditor('- [X] done', 3);
-      expect(handleCheckboxClick(editor as any)).toBe(true);
-    });
+  it.each([
+    ['- [ ]task', 0, 3],
+    ['- [ ] some item [ ]', 0, 17],
+    ['```md\n- [ ] code\n```', 1, 3],
+    ['- `[ ]` code', 0, 3],
+    ['text with [ ] brackets', 0, 11],
+  ])('does not toggle text the parser rejects: %s', (text, line, character) => {
+    expect(toggle(makeEditor(text, line, character))).toBe(false);
   });
 
-  describe('code protection', () => {
-    it('does not toggle an empty [ ] inside a fenced code block', () => {
-      const markdown = '```js\nconst arr = [ ];\n```';
-      const doc = new TextDocument(Uri.file('test.md'), 'markdown', 1, markdown);
-      const editor = {
-        document: doc,
-        selection: new Selection(new Position(1, 13), new Position(1, 13)),
-      };
-      expect(handleCheckboxClick(editor as any)).toBe(false);
-      expect(workspace.applyEdit).not.toHaveBeenCalled();
-    });
-
-    it('does not toggle an empty [ ] inside an inline code span', () => {
-      const editor = makeEditor('Here is code: `const a = [ ];` in text', 26);
-      expect(handleCheckboxClick(editor as any)).toBe(false);
-      expect(workspace.applyEdit).not.toHaveBeenCalled();
-    });
+  it('does not mistake an indented code fence for an open fenced block', () => {
+    expect(toggle(makeEditor('    ```\n- [ ] task', 1, 3))).toBe(true);
   });
 
-  describe('caret', () => {
-    it('does not move the caret itself (the decorator restores it)', () => {
-      const editor = makeEditor('- [ ] task', 3);
-      handleCheckboxClick(editor as any);
-      expect(editor.selection.active.character).toBe(3);
-      expect(editor.selection.active.line).toBe(0);
-    });
+  it('rejects selections and does not move the caret itself', () => {
+    const editor = makeEditor('- [ ] task', 0, 3);
+    editor.selection = new Selection(new Position(0, 2), new Position(0, 5));
+    expect(toggle(editor)).toBe(false);
+    editor.selection = new Selection(new Position(0, 3), new Position(0, 3));
+    expect(toggle(editor)).toBe(true);
+    expect(editor.selection.active).toEqual(new Position(0, 3));
   });
 
-  describe('multiple checkboxes on one line', () => {
-    it('toggles only the checkbox the cursor is on', () => {
-      // "- [ ] a [ ] b" — first checkbox at 2, trailing [ ] at 8 (not a checkbox)
-      const editor = makeEditor('- [ ] a [ ] b', 3);
-      expect(handleCheckboxClick(editor as any)).toBe(true);
-      const edit = (workspace.applyEdit as Mock).mock.calls[0][0] as WorkspaceEdit;
-      expect(edit.getEdits()[0].range.start.character).toBe(3); // bracketStart(2) + 1
-    });
+  it('maps parser offsets in CRLF documents', () => {
+    expect(toggle(makeEditor('first\r\n- [ ] second', 1, 3))).toBe(true);
+    expect(edit().getEdits()[0].range.start).toEqual(new Position(1, 3));
   });
 });

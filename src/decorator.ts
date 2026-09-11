@@ -13,7 +13,7 @@ import { FileDecorationStateStore } from './decorator/file-decoration-state';
 import { MermaidUpdateCoordinator } from './decorator/mermaid-update-coordinator';
 import { DecorationTypeRegistry } from './decorator/decoration-type-registry';
 import { filterDecorationsForEditor, ScopeEntry } from './decorator/visibility-model';
-import { handleCheckboxClick } from './decorator/checkbox-toggle';
+import { buildCheckboxTargets, handleCheckboxClick } from './decorator/checkbox-toggle';
 import { MermaidDiagramDecorations } from './decorator/mermaid-diagram-decorations';
 import { DecoratorUpdateScheduler } from './decorator/update-scheduler';
 import { MathDecorations } from './math/math-decorations';
@@ -190,7 +190,11 @@ export class Decorator {
     // the click, and toggling must not disturb the user's selection (whether a
     // caret or a text range).
     const toggled =
-      kind === TextEditorSelectionChangeKind.Mouse && handleCheckboxClick(this.activeEditor);
+      kind === TextEditorSelectionChangeKind.Mouse &&
+      handleCheckboxClick(
+        this.activeEditor,
+        buildCheckboxTargets(this.activeEditor, this.parseCache.get(this.activeEditor.document))
+      );
     if (toggled) {
       this.lastToggleAt = Date.now();
       if (sel) {
